@@ -42,6 +42,15 @@
 *.idb
 *.pdb
 
+# Images
+*.tif
+*.tiff
+*.bmp
+*.png
+*.jpg
+*.czi
+*.nd2
+
 # Kernel Module Compile Results
 *.mod*
 *.cmd
