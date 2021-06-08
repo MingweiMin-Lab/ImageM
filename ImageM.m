@@ -1,7 +1,7 @@
 function ImageM()
 
 %ImageM mimics the software ImageJ. Created by An Gong, 2021-01-17.
-%Last update: 2021-05-16
+%Last update: 2021-06-02
 
 
 global windows activeWin nonFigureList;
@@ -28,83 +28,346 @@ hMenuWindows = uimenu(hMain, 'label', '&Window');
 hMenuHelp = uimenu(hMain, 'label', '&Help');
 hAbout = uimenu(hMenuHelp, 'label', 'About ImageM','Callback',@menuAboutCallBackFcn);
 
-
 set(hMain, 'Visible', 'on');
+
 
 %%
  
 
-function sliderCallBackFcn(hObject, eventdata, handles)
-    currentFrm = int16(get(hObject, 'value'));
-    setappdata(hObject.Parent, 'currentFrm',currentFrm);
-    %hImg = handles.hImg;
+function sliderCallBackFcn(hObject, eventdata, handles, sliderNum)
+    figInfo =  getappdata(hObject.Parent, 'figInfo');
+    winInfo = getappdata(hObject.Parent, 'winInfo');
     imData = getappdata(hObject.Parent, 'imData');
-    figInfo = getappdata(hObject.Parent, 'figInfo');
-    fileFolder = figInfo.fileFolder;
-    fileNames = figInfo.fileNames;
-    imageType = figInfo.imageType;
-    sizeInfo = figInfo.sizeInfo;
     hAxes = findobj(hObject.Parent, 'Type', 'Axes');
-    if figInfo.virtualStack
-        imDisp = imread(fullfile(fileFolder,fileNames{currentFrm}));
+    
+    currentFrm = winInfo.currentFrm;
+    dimensionOrder = winInfo.dimensionOrder;
+    dim = length(currentFrm);
+    fileFolder = winInfo.fileFolder;
+    fileNames = winInfo.fileNames;
+    imageType = winInfo.imageType;
+%     width = figInfo.width;
+%     height = figInfo.height;
+    
+    currentFrm(sliderNum) = int16(get(hObject, 'value'));
+%     if imageType == "RGB"
+%         currentFrm(sliderNum) = int16(get(hObject, 'value'));
+%     else
+%         currentFrm(sliderNum) = int16(get(hObject, 'value'));
+%     end
+    
+    winInfo.currentFrm = currentFrm;
+    setappdata(hObject.Parent, 'winInfo',winInfo);
+    if winInfo.isVirtualStack
+        if class(figInfo) ~= "BioformatsImage"
+            imData = imread(fullfile(fileFolder,fileNames{currentFrm}));
+            setappdata(hObject.Parent, 'imData',imData);
+            imDisp = imData;
+        else
+            if imageType == "RGB"
+                planeNum = nan(1,3);
+                fullOrder = 'ZTL';
+                counter = 1;
+                for i = 1:length(planeNum)
+                    if contains(winInfo.dimensionOrder, fullOrder(i))
+                        planeNum(i)=currentFrm(counter);
+                        counter = counter+1;
+                    else
+                        planeNum(i)=1;
+                    end
+                end
+                imDisp(:,:,1) = figInfo.getPlane([planeNum(1), 1, planeNum(2:end)]);
+                imDisp(:,:,2) = figInfo.getPlane([planeNum(1), 2, planeNum(2:end)]);
+                imDisp(:,:,3) = figInfo.getPlane([planeNum(1), 3, planeNum(2:end)]);
+            else
+                planeNum = nan(1,4);
+                fullOrder = 'CZTL';
+                counter = 1;
+                for i = 1:length(planeNum)
+                    if contains(winInfo.dimensionOrder, fullOrder(i))
+                        planeNum(i)=currentFrm(counter);
+                        counter = counter+1;
+                    else
+                        planeNum(i)=1;
+                    end
+                end
+                if contains(figInfo.filename, "nd2")
+                    imDisp = figInfo.getXYplane(planeNum(1), planeNum(4), planeNum(3));
+                else
+                    imDisp = figInfo.getPlane([planeNum(2), planeNum(1), planeNum(3), planeNum(4)]);  %need to be the squence of "ZCTL"
+                end
+                
+            end
+        end
+        
     else
-        imDisp = imData(:,:,currentFrm);
-    end   
+        imDisp =  getXYPlane(imData, currentFrm, imageType);
+    end
+    
     set(hAxes.Children, "CData", imDisp);
-    text = strcat(num2str(currentFrm), "/",num2str(sizeInfo(3)),", ",num2str(sizeInfo(1)),"*",num2str(sizeInfo(2)), ", ", imageType);
+
+    if imageType == "RGB"
+        switch dim
+            case 1                             
+                if winInfo.isVirtualStack
+                    maxFrm = max(figInfo.sizeZ,figInfo.sizeT);
+                else
+                    maxFrm = size(imData, 4);
+                end                
+                text = strcat(num2str(currentFrm), "/",num2str(maxFrm),", ",num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
+        end
+                
+    else  % for grayscale images         
+        switch dim
+            case 1                
+                maxFrm = size(imData, 3);
+                text = strcat(num2str(currentFrm), "/",num2str(maxFrm),", ",num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
+                
+             case 2                
+                maxFrm1 = size(imData, 3);
+                maxFrm2 = size(imData, 4);
+                text = strcat(dimensionOrder(3), num2str(currentFrm(1)), "/",num2str(maxFrm1),", ",dimensionOrder(4), num2str(currentFrm(2)), "/",num2str(maxFrm2),...
+                    ", ",num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
+            case 3
+                maxFrm1 = size(imData, 3);
+                maxFrm2 = size(imData, 4);
+                maxFrm3 = size(imData, 5);
+                
+                maxFrm = nan(1,4);
+                if winInfo.isVirtualStack
+                    maxFrm(1)=figInfo.sizeC;
+                    maxFrm(2)=figInfo.sizeZ;
+                    maxFrm(3)=figInfo.sizeT;
+                    maxFrm(4)=figInfo.seriesCount;
+                    maxFrm(maxFrm==1)=[];
+                    maxFrm1 = maxFrm(1);
+                    maxFrm2 = maxFrm(2);
+                    maxFrm3 = maxFrm(3);
+                end
+                
+                text = strcat(dimensionOrder(3), num2str(currentFrm(1)), "/",num2str(maxFrm1),", ",dimensionOrder(4), num2str(currentFrm(2)), "/",num2str(maxFrm2),...
+                    ", ",dimensionOrder(5), num2str(currentFrm(3)), "/",num2str(maxFrm3),", ",num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
+            case 4
+                maxFrm1 = size(imData, 3);
+                maxFrm2 = size(imData, 4);
+                maxFrm3 = size(imData, 5);
+                maxFrm4 = size(imData, 6);
+                
+                text = strcat(dimensionOrder(3), num2str(currentFrm(1)), "/",num2str(maxFrm1),...
+                    ", ",dimensionOrder(4), num2str(currentFrm(2)), "/",num2str(maxFrm2),...
+                    ", ",dimensionOrder(5), num2str(currentFrm(3)), "/",num2str(maxFrm3),", ",...
+                    ", ",dimensionOrder(6), num2str(currentFrm(4)), "/",num2str(maxFrm4),", ",...
+                    num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);                
+        end
+    end
+            
     hText = handles.hText;
     set(hText, "string", text);
-%     figure(hObject.Parent);
     
 end
 
-function createFigure(hObject,eventdata, handles, figInfo, imData)
+function disp = getXYPlane(imData, currentFrm, imageType)
+    dim = length(currentFrm);
+    if imageType == "RGB"
+        switch dim
+            case 1
+                disp = imData(:,:,:, currentFrm);
+            case 2
+                disp = imData(:,:,:, currentFrm(1), currentFrm(2));
+            case 3
+                disp = imData(:,:,:, currentFrm(1), currentFrm(2), currentFrm(3));
+        end
+    else
+        switch dim
+            case 1
+                disp = imData(:,:,currentFrm);
+            case 2
+                disp = imData(:,:,currentFrm(1), currentFrm(2));
+            case 3
+                disp = imData(:,:,currentFrm(1), currentFrm(2), currentFrm(3));
+            case 4
+                disp = imData(:,:,currentFrm(1), currentFrm(2), currentFrm(3), currentFrm(4));
+        end
+    end
+end
+
+function figureCreateFcn(hObject,eventdata, handles, figInfo, winInfo, imData)
     textBoxHeight = 15;
     sliderHeight = 20;
     gap = 5;
     ratio = 1;
-    currentFrm = 1;
-    width = figInfo.sizeInfo(1);
-    height = figInfo.sizeInfo(2);
+    
+    currentFrm = winInfo.currentFrm;
+    width = figInfo.width;
+    height = figInfo.height;
+    dimensionOrder = winInfo.dimensionOrder;
+    dim = length(dimensionOrder);
+    
     if width<200
         ratio = round(200/width);
     elseif width>800
         ratio = 1/round(width/600);
     end
-    windowName = figInfo.windowName;
+    windowName = winInfo.windowName;
     if ratio ~=1
         windowName = [windowName, '(',num2str(int8(100*ratio)),'%)'];
     end
-    set(hObject,"position",[200, 200, width*ratio+2*gap, height*ratio+5*gap+textBoxHeight*2+sliderHeight], "name", windowName);
-    figDisp = nan(figInfo.sizeInfo(1),figInfo.sizeInfo(2));
-    if figInfo.virtualStack
-        figDisp = imread(fullfile(figInfo.fileFolder,figInfo.fileNames{1}));
+    
+    figDisp = nan(figInfo.width,figInfo.height);
+    if winInfo.isVirtualStack
+        %figDisp = imread(fullfile(figInfo.fileFolder,figInfo.fileNames{1}));
+        figDisp = imData;
     else
-        figDisp = imData(:,:,1);
+        %figDisp = imData(:,:,currentFrame);
+        figDisp = getXYPlane(imData, currentFrm, winInfo.imageType);
     end
-    textInit = strcat(num2str(figInfo.sizeInfo(1)),"*",num2str(figInfo.sizeInfo(2)), ",", figInfo.imageType);
-    hText = uicontrol("style", "text", "position", [gap, figInfo.sizeInfo(2)*ratio+4*gap+sliderHeight+textBoxHeight, figInfo.sizeInfo(1)*ratio, textBoxHeight], "HorizontalAlignment", "left");
-    hAxes = axes("units", "pixels", "Position", [gap, 3*gap+sliderHeight+textBoxHeight, figInfo.sizeInfo(1)*ratio, figInfo.sizeInfo(2)*ratio], "visible", "off", "parent", hObject);
+    
+%% here is the layout of the figure windown
+
+    textInit = strcat(num2str(figInfo.width),"*",num2str(figInfo.height), ",", winInfo.imageType);
+    hText = uicontrol("style", "text", "HorizontalAlignment", "left");
+    hAxes = axes("units", "pixels",  "visible", "off", "parent", hObject);
     hImg = imshow(figDisp,[], "parent", hAxes);
     handles.hImg = hImg;
     handles.hText = hText;
     guidata(hObject, handles);
-
-    setappdata(hObject,'figInfo',figInfo);
-    setappdata(hObject,'imData',imData);
-    setappdata(hObject,'currentFrm', currentFrm);
-
     
-    if figInfo.sizeInfo(3)>1
-        set(hText, "string", strcat(num2str(currentFrm), "/",num2str(figInfo.sizeInfo(3)),", ",num2str(figInfo.sizeInfo(1)),"*",num2str(figInfo.sizeInfo(2)), ", ", figInfo.imageType));
-        hSlider = uicontrol("style", "slider", "value", currentFrm,"Min",1, "Max",figInfo.sizeInfo(3), "SliderStep",[1/(figInfo.sizeInfo(3)-1), 1/(figInfo.sizeInfo(3)-1)]);
-        set(hSlider, "position", [gap, 2*gap+textBoxHeight, figInfo.sizeInfo(1)*ratio, sliderHeight]);
-        set(hSlider,"Callback", {@sliderCallBackFcn,handles});
-    else
-        set(hText, "string", textInit);
-    end
+    if winInfo.imageType == "RGB"
+        switch dim
+            case 3
+                set(hObject,"position",[200, 200, width*ratio+2*gap, height*ratio+4*gap+2*textBoxHeight], "name", windowName);
+                set(hText, "position", [gap, figInfo.height*ratio+3*gap+textBoxHeight, figInfo.width*ratio, textBoxHeight]);
+                set(hAxes, "Position", [gap, 2*gap+textBoxHeight, figInfo.width*ratio, figInfo.height*ratio]);
+            case 4
+                set(hObject,"position",[200, 200, width*ratio+2*gap, height*ratio+5*gap+sliderHeight+2*textBoxHeight], "name", windowName);
+                set(hText, "position", [gap, figInfo.height*ratio+4*gap+textBoxHeight+sliderHeight, figInfo.width*ratio, textBoxHeight]);
+                set(hAxes, "Position", [gap, 3*gap+textBoxHeight+sliderHeight, figInfo.width*ratio, figInfo.height*ratio]);
+                               
+                if winInfo.isVirtualStack
+                    maxFrm = max(figInfo.sizeZ,figInfo.sizeT);
+                else
+                    maxFrm = size(imData, 4);
+                end
+                
+                textInit = strcat(num2str(currentFrm), "/",num2str(maxFrm),", ",num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
+                hSlider = uicontrol("style", "slider", "value", currentFrm,"Min",1, "Max",maxFrm, "SliderStep",[1/(maxFrm-1), 1/(maxFrm-1)]);
+                set(hSlider, "position", [gap, 2*gap+textBoxHeight, figInfo.width*ratio, sliderHeight]);
+                set(hSlider,"Callback", {@sliderCallBackFcn,handles, 1});               %%The first slider
+        end
+                
+    else  % for grayscale images
+                
+        switch dim
+            case 2
+                set(hObject,"position",[100, 100, width*ratio+2*gap, height*ratio+4*gap+2*textBoxHeight], "name", windowName);
+                set(hText, "position", [gap, figInfo.height*ratio+3*gap+textBoxHeight, figInfo.width*ratio, textBoxHeight]);
+                set(hAxes, "Position", [gap, 2*gap+textBoxHeight, figInfo.width*ratio, figInfo.height*ratio]);
+            case 3
+                set(hObject,"position",[100, 100, width*ratio+2*gap, height*ratio+5*gap+sliderHeight+2*textBoxHeight], "name", windowName);
+                set(hText, "position", [gap, figInfo.height*ratio+4*gap+textBoxHeight+sliderHeight, figInfo.width*ratio, textBoxHeight]);
+                set(hAxes, "Position", [gap, 3*gap+textBoxHeight+sliderHeight, figInfo.width*ratio, figInfo.height*ratio]);
+                
+                maxFrm = size(imData, 3);
+                textInit = strcat(num2str(currentFrm), "/",num2str(maxFrm),", ",num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
+                hSlider = uicontrol("style", "slider", "value", currentFrm,"Min",1, "Max",maxFrm, "SliderStep",[1/(maxFrm-1), 1/(maxFrm-1)]);
+                set(hSlider, "position", [gap, 2*gap+textBoxHeight, figInfo.width*ratio, sliderHeight]);
+                set(hSlider,"Callback", {@sliderCallBackFcn,handles, 1});               %%first slider
+                
+             case 4
+                set(hObject,"position",[100, 100, width*ratio+2*gap, height*ratio+6*gap+sliderHeight*2+2*textBoxHeight], "name", windowName);
+                set(hText, "position", [gap, figInfo.height*ratio+5*gap+textBoxHeight+2*sliderHeight, figInfo.width*ratio, textBoxHeight]);
+                set(hAxes, "Position", [gap, 4*gap+textBoxHeight+2*sliderHeight, figInfo.width*ratio, figInfo.height*ratio]);
+                
+                maxFrm1 = size(imData, 3);
+                maxFrm2 = size(imData, 4);
+                textInit = strcat(dimensionOrder(3), num2str(currentFrm(1)), "/",num2str(maxFrm1),", ",dimensionOrder(4), num2str(currentFrm(2)), "/",num2str(maxFrm2),...
+                    ", ",num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
+                hSlider = uicontrol("style", "slider", "value", currentFrm(1),"Min",1, "Max",maxFrm1, "SliderStep",[1/(maxFrm1-1), 1/(maxFrm1-1)]);
+                set(hSlider, "position", [gap, 3*gap+textBoxHeight+sliderHeight, figInfo.width*ratio, sliderHeight]);
+                set(hSlider,"Callback", {@sliderCallBackFcn,handles, 1});               %%first slider 
+                
+                hSlider2 = uicontrol("style", "slider", "value", currentFrm(2),"Min",1, "Max",maxFrm2, "SliderStep",[1/(maxFrm2-1), 1/(maxFrm2-1)]);
+                set(hSlider2, "position", [gap, 2*gap+textBoxHeight, figInfo.width*ratio, sliderHeight]);
+                set(hSlider2,"Callback", {@sliderCallBackFcn,handles, 2});               %%second slider
+             
+            case 5
+                set(hObject,"position",[100, 100, width*ratio+2*gap, height*ratio+7*gap+sliderHeight*3+2*textBoxHeight], "name", windowName);
+                set(hText, "position", [gap, figInfo.height*ratio+6*gap+textBoxHeight+3*sliderHeight, figInfo.width*ratio, textBoxHeight]);
+                set(hAxes, "Position", [gap, 5*gap+textBoxHeight+3*sliderHeight, figInfo.width*ratio, figInfo.height*ratio]);
+                
+                maxFrm1 = size(imData, 3);
+                maxFrm2 = size(imData, 4);
+                maxFrm3 = size(imData, 5);
+                
+                maxFrm = nan(1,4);
+                if winInfo.isVirtualStack
+                    maxFrm(1)=figInfo.sizeC;
+                    maxFrm(2)=figInfo.sizeZ;
+                    maxFrm(3)=figInfo.sizeT;
+                    maxFrm(4)=figInfo.seriesCount;
+                    maxFrm(maxFrm==1)=[];
+                    maxFrm1 = maxFrm(1);
+                    maxFrm2 = maxFrm(2);
+                    maxFrm3 = maxFrm(3);
+                end
+                  
+                textInit = strcat(dimensionOrder(3), num2str(currentFrm(1)), "/",num2str(maxFrm1),", ",dimensionOrder(4), num2str(currentFrm(2)), "/",num2str(maxFrm2),...
+                    ", ",dimensionOrder(5), num2str(currentFrm(3)), "/",num2str(maxFrm3),", ",num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
+                
+                hSlider = uicontrol("style", "slider", "value", currentFrm(1),"Min",1, "Max",maxFrm1, "SliderStep",[1/(maxFrm1-1), 1/(maxFrm1-1)]);
+                set(hSlider, "position", [gap, 4*gap+textBoxHeight+sliderHeight*2, figInfo.width*ratio, sliderHeight]);
+                set(hSlider,"Callback", {@sliderCallBackFcn,handles, 1});               %%first slider 
+                
+                hSlider2 = uicontrol("style", "slider", "value", currentFrm(2),"Min",1, "Max",maxFrm2, "SliderStep",[1/(maxFrm2-1), 1/(maxFrm2-1)]);
+                set(hSlider2, "position", [gap, 3*gap+textBoxHeight+sliderHeight, figInfo.width*ratio, sliderHeight]);
+                set(hSlider2,"Callback", {@sliderCallBackFcn,handles, 2});               %%second slider                
+
+                hSlider3 = uicontrol("style", "slider", "value", currentFrm(3),"Min",1, "Max",maxFrm3, "SliderStep",[1/(maxFrm3-1), 1/(maxFrm3-1)]);
+                set(hSlider3, "position", [gap, 2*gap+textBoxHeight, figInfo.width*ratio, sliderHeight]);
+                set(hSlider3,"Callback", {@sliderCallBackFcn,handles, 3});               %%third slider         
+                
+            case 6
+                set(hObject,"position",[100, 100, width*ratio+2*gap, height*ratio+8*gap+sliderHeight*4+2*textBoxHeight], "name", windowName);
+                set(hText, "position", [gap, figInfo.height*ratio+7*gap+textBoxHeight+4*sliderHeight, figInfo.width*ratio, textBoxHeight]);
+                set(hAxes, "Position", [gap, 6*gap+textBoxHeight+4*sliderHeight, figInfo.width*ratio, figInfo.height*ratio]);
+                
+                maxFrm1 = size(imData, 3);
+                maxFrm2 = size(imData, 4);
+                maxFrm3 = size(imData, 5);
+                maxFrm4 = size(imData, 6);
+                
+                textInit = strcat(dimensionOrder(3), num2str(currentFrm(1)), "/",num2str(maxFrm1),...
+                    ", ",dimensionOrder(4), num2str(currentFrm(2)), "/",num2str(maxFrm2),...
+                    ", ",dimensionOrder(5), num2str(currentFrm(3)), "/",num2str(maxFrm3),", ",...
+                    ", ",dimensionOrder(6), num2str(currentFrm(4)), "/",num2str(maxFrm4),", ",...
+                    num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
+                
+                hSlider = uicontrol("style", "slider", "value", currentFrm(1),"Min",1, "Max",maxFrm1, "SliderStep",[1/(maxFrm1-1), 1/(maxFrm1-1)]);
+                set(hSlider, "position", [gap, 5*gap+textBoxHeight+sliderHeight*3, figInfo.width*ratio, sliderHeight]);
+                set(hSlider,"Callback", {@sliderCallBackFcn,handles, 1});               %%first slider 
+                
+                hSlider2 = uicontrol("style", "slider", "value", currentFrm(2),"Min",1, "Max",maxFrm2, "SliderStep",[1/(maxFrm2-1), 1/(maxFrm2-1)]);
+                set(hSlider2, "position", [gap, 4*gap+textBoxHeight+sliderHeight*2, figInfo.width*ratio, sliderHeight]);
+                set(hSlider2,"Callback", {@sliderCallBackFcn,handles, 2});               %%second slider                
+
+                hSlider3 = uicontrol("style", "slider", "value", currentFrm(3),"Min",1, "Max",maxFrm3, "SliderStep",[1/(maxFrm3-1), 1/(maxFrm3-1)]);
+                set(hSlider3, "position", [gap, 3*gap++sliderHeight+textBoxHeight, figInfo.width*ratio, sliderHeight]);
+                set(hSlider3,"Callback", {@sliderCallBackFcn,handles, 3});               %%third slider   
+                
+                hSlider4 = uicontrol("style", "slider", "value", currentFrm(4),"Min",1, "Max",maxFrm4, "SliderStep",[1/(maxFrm4-1), 1/(maxFrm4-1)]);
+                set(hSlider4, "position", [gap, 2*gap+textBoxHeight, figInfo.width*ratio, sliderHeight]);
+                set(hSlider4,"Callback", {@sliderCallBackFcn,handles, 4});               %%forth slider                     
+        end
+   end
+
+    set(hText, "string", textInit);
     set(hObject, "visible", "on");
     impixelinfo;
+    
+    setappdata(hObject,'figInfo',figInfo);
+    setappdata(hObject,'winInfo',winInfo);
+    setappdata(hObject,'imData',imData);
+ 
 end
 
 function figureCloseFcn(hObject,eventdata, handles)
@@ -122,17 +385,18 @@ function figurePresskeyFcn(hObject,eventdata, handles)
     switch eventdata.Character
         case 'D'
             menuDuplicateCallBackFcn();
+        case 'C'
+            menuContrastCallBackFcn();
      end
 end
 
 
 function buttonCallbackFcn(hObject,eventdata, handles)
-    figInfo.virtualStack = 0;
-    figInfo.sizeInfo = nan(1,3);
-    figInfo.fileNames = [];
-    figInfo.fileFolder = [];
-    figInfo.windowName = [];
-    figInfo.imageType = [];
+    winInfo.isVirtualStack = 1;
+    winInfo.fileNames = [];
+    winInfo.fileFolder = [];
+    winInfo.windowName = [];
+    winInfo.imageType = [];
     imData = [];
     
     hTemp = hObject.Parent;
@@ -143,28 +407,34 @@ function buttonCallbackFcn(hObject,eventdata, handles)
         valName = pop.String;
     end
     imData = evalin('base',valName);
-    figInfo.windowName = valName;
-    figInfo.sizeInfo(1) = size(imData,1);
-    figInfo.sizeInfo(2) = size(imData,2);
-    figInfo.sizeInfo(3) = 1;
+    winInfo.windowName = valName;
+    figInfo.width = size(imData,1);
+    figInfo.height = size(imData,2);
+    %need mark the order
+    figInfo.sizeT = 1;
     if length(size(imData))>2
-        figInfo.sizeInfo(3) = size(imData,3);
+        figInfo.sizeT = size(imData,3);
+        winInfo.dimensionOrder = 'XYT';
     end
-    figInfo.imageType=class(imData);
+    %need mark the order
+    winInfo.imageType=class(imData);
     setappdata(hTemp, 'figInfo', figInfo);
     setappdata(hTemp, 'imData', imData);
+    setappdata(hTemp, 'winInfo', winInfo);
+
     uiresume(hTemp);
 end
 
-function [out1, out2] = getVaribleGUI()
+function [out1, out2, out3] = getVaribleGUI()
         out1 = [];
         out2 = [];
+        out3 = [];
         hTemp = figure('menubar', 'none', 'Position', [500 600 300 100],'NumberTitle','off','name', 'Choose a varible', 'Dockcontrols', 'off','Resize','off');
         set(hTemp, 'windowStyle','modal');
         pop = uicontrol(hTemp,'Style','popupmenu','Position', [70 50 60 20]);
         txt = uicontrol(hTemp, 'Style', 'text','String', 'Varibles', 'Position', [20 50 40 20] );
         button = uicontrol(hTemp, 'Style', 'pushButton','String', 'Ok', 'Position', [170 50 60 20]);
-        set(button, 'Callback', @buttonCallbackFcn);
+        set(button, 'Callback', @buttonCallbackFcn); %return the figInfo and imData to window hTemp
         vals = evalin('base', 'whos'); % get varible information in base workspace
         [valNames]={vals.name};
         valNames=string(valNames);
@@ -172,59 +442,75 @@ function [out1, out2] = getVaribleGUI()
         uiwait(hTemp);
         if ishandle(hTemp)
             out1 = getappdata(hTemp,'figInfo');
-            out2 = getappdata(hTemp,'imData');
+            out2 = getappdata(hTemp,'winInfo');
+            out3 = getappdata(hTemp,'imData');
             delete(hTemp);
         end
 end
 
 function openFiugreFcn(hObject,eventdata, handles, type)
 
-    figInfo.virtualStack = 1;
-    figInfo.sizeInfo = nan(1,3);
-    figInfo.fileNames = [];
-    figInfo.fileFolder = [];
-    figInfo.windowName = [];
-    figInfo.imageType = [];
+    winInfo.isVirtualStack = 1;
+    winInfo.fileNames = [];
+    winInfo.fileFolder = [];
+    winInfo.windowName = [];
+    winInfo.imageType = [];
     imData = [];
+    figInfo = [];
     switch type
         case 'file'
-             [fileName, fileFolder, index] = uigetfile({"*.tif; *.tiff; *.bmp; *.jpg"; "*.*"}, "File Selector");
+             [fileName, fileFolder, index] = uigetfile({"*.tif; *.tiff; *.bmp; *.jpg";"*.czi; *nd2"; "*.*"}, "File Selector");
 
              if index
-                figInfo.fileFolder = fileFolder;
-                figInfo.windowName = fileName;
-                figInfo.fileNames = cellstr(fileName);
-                imData = imread(fullfile(fileFolder, fileName));
-                figInfo.imageType = class(imData);
-                figInfo.sizeInfo(1) = size(imData,2);
-                figInfo.sizeInfo(2) = size(imData,1);
-                figInfo.sizeInfo(3) = 1;
+                winInfo.fileFolder = fileFolder;
+                winInfo.windowName = fileName;
+                winInfo.fileNames = cellstr(fileName);
+                %imData = imread(fullfile(fileFolder, fileName));
+                [figInfo, imData, dimensionOrder] = bioFormatsParser(fullfile(fileFolder, fileName), winInfo.isVirtualStack);
+                
+                winInfo.dimensionOrder = dimensionOrder;
+                winInfo.imageType = class(imData);
+                freedom = length(dimensionOrder)-2;
+                
+                if ~(contains(fileName, 'nd2')||contains(fileName, 'czi'))
+                    temp = imfinfo(fullfile(fileFolder, fileName));
+                    if temp(1).ColorType == "truecolor"
+                        winInfo.imageType = 'RGB';
+                        imData = uint8(imData);
+                        freedom = length(dimensionOrder)-3;
+                    end                    
+                end
+                
+                if freedom == 0
+                    freedom = 1;
+                end
+                winInfo.currentFrm = ones(1, freedom);
              end
         case  'folder'
               fileFolder = uigetdir();
               if fileFolder ~= 0
-                figInfo.fileFolder = fileFolder;
+                winInfo.fileFolder = fileFolder;
                 filesInfo = dir(fullfile(fileFolder,"*.tif"));
-                figInfo.fileNames = {filesInfo.name};
-                imData = imread(fullfile(fileFolder,figInfo.fileNames{1}));
-                figInfo.imageType = class(imData);
+                winInfo.fileNames = {filesInfo.name};
+                imData = imread(fullfile(fileFolder,winInfo.fileNames{1}));
+                winInfo.imageType = class(imData);
                 width = size(imData,2); %get width
                 height = size(imData,1); %get height
-                figInfo.sizeInfo(1) = width;
-                figInfo.sizeInfo(2) = height;
-                figInfo.sizeInfo(3) = length(filesInfo);
+                figInfo.width = width;
+                figInfo.height = height;
+                figInfo.sizeT = length(filesInfo);
+                winInfo.dimensionOrder = 'XYT';
                 fileFolderNameSplit = split(fileFolder, "\");
-                figInfo.windowName = fileFolderNameSplit{end};
+                winInfo.windowName = fileFolderNameSplit{end};
               end
-              case  'varible'
-                [figInfo, imData] = getVaribleGUI;
-                                
+        case  'varible'
+              [figInfo, imData] = getVaribleGUI;                   
         otherwise
             warning('unproper parameter for opening figures!');
     end
 
     if ~isempty(imData)
-        hFig = figure("menubar", "none","NumberTitle","off",'CreateFcn',{@createFigure, blanks(0), figInfo, imData},'DeleteFcn', @figureCloseFcn);
+        hFig = figure("menubar", "none","NumberTitle","off",'CreateFcn',{@figureCreateFcn, blanks(0), figInfo, winInfo, imData},'DeleteFcn', @figureCloseFcn);
         set(hFig, 'WindowKeyPressFcn',@figurePresskeyFcn);
         windows = [windows, hFig];
     end
@@ -247,8 +533,8 @@ function menuSaveCallBackFcn(hObject,eventdata, handles)
     activeWin = getActiveFigure();
     hAxes = activeWin.CurrentAxes;
     data = get(hAxes.Children, "CData");
-    figInfo = getappdata(activeWin, 'figInfo');
-    uisave('data', figInfo.windowName);
+    winInfo = getappdata(activeWin, 'winInfo');
+    uisave(data, winInfo.windowName);
 end
 
 function menuDuplicateCallBackFcn(hObject,eventdata, handles)
@@ -257,19 +543,19 @@ function menuDuplicateCallBackFcn(hObject,eventdata, handles)
     
 %     figData = getappdata(activeWin, 'figData');
 %     currentFrm = getappdata(activeWin, 'currentFrm');
-    figInfo = getappdata(hNew, 'figInfo');
-    oldName = split(figInfo.windowName, ".");
+    winInfo = getappdata(hNew, 'winInfo');
+    oldName = split(winInfo.windowName, ".");
     if length(oldName) == 1
-        figInfo.windowName = strcat(oldName{1},'-copy');
+        winInfo.windowName = strcat(oldName{1},'-copy');
     else
-        figInfo.windowName = strcat(oldName{1:end-1},'-copy.',oldName{end});
+        winInfo.windowName = strcat(oldName{1:end-1},'-copy.',oldName{end});
     end
     
-    setappdata(hNew,'figInfo',figInfo);
+    setappdata(hNew,'winInfo',winInfo);
 
 %     setappdata(hNew,'figData',figData);
 %     setappdata(hNew,'currentFrm', currentFrm);
-    set(hNew, "name", figInfo.windowName);
+    set(hNew, "name", winInfo.windowName);
     windows = [windows, hNew];
     activeWin = hNew;
 end
@@ -315,8 +601,7 @@ function sliderMaxCallBackFcn(hObject, eventdata, handles)
         handles.activeWin=activeWin;
         guidata(hObject,handles);
     end
-    
-    
+
     hSliderMin = findobj(hTemp, 'tag', 'sliderMin');
     maxSliderValue = get(hObject, 'value');
     minSliderValue = get(hSliderMin, 'value');
@@ -464,11 +749,6 @@ function contrastPanelUpdate(hObject, eventdata, handles)
         delete(hAxes.Children);
     end
 
-    
-
-    
-
-
 end
 
 function nonWindowPanelCloseFcn(hObject,eventdata, handles, panelType)
@@ -490,8 +770,6 @@ function menuContrastCallBackFcn(hObject, eventdata, handles)
         hTemp=nonFigureList.contrastPanel;
         figure(hTemp);
     end
-    
-    
 end
 
     
