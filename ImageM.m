@@ -12,9 +12,10 @@ nonFigureList.contrastPanel = [];
 %% define the user interface
 hMain = figure('menubar', 'none', 'Visible', 'off', 'Position', [600 800 350 20],'NumberTitle','off','name', 'ImageM', 'Dockcontrols', 'off','Resize','off');
 hMenuFile = uimenu(hMain, 'label', '&File');
-uimenu(hMenuFile, 'label', 'Open', 'Accelerator', 'O','Callback',{@openFiugreFcn, blanks(0),'file'});
-uimenu(hMenuFile, 'label', 'ImportAsStack', 'Accelerator', 'I','Callback',{@openFiugreFcn, blanks(0), 'folder'});
-uimenu(hMenuFile, 'label', 'ImportFromVarible', 'Accelerator', 'V','Callback',{@openFiugreFcn, blanks(0), 'varible'});
+uimenu(hMenuFile, 'label', 'Open', 'Accelerator', 'O','Callback',{@openFiugreFcn, blanks(0),'file',0});
+uimenu(hMenuFile, 'label', 'OpenAsVirtualStack', 'Callback',{@openFiugreFcn, blanks(0),'file',1});
+uimenu(hMenuFile, 'label', 'ImportAsStack', 'Accelerator', 'I','Callback',{@openFiugreFcn, blanks(0), 'folder',0});
+uimenu(hMenuFile, 'label', 'ImportFromVarible', 'Accelerator', 'V','Callback',{@openFiugreFcn, blanks(0), 'varible',0});
 uimenu(hMenuFile, 'label', 'Save', 'Accelerator', 'S','Callback',@menuSaveCallBackFcn);
 
 hMenuImage = uimenu(hMain, 'label', '&Image');
@@ -30,10 +31,7 @@ hAbout = uimenu(hMenuHelp, 'label', 'About ImageM','Callback',@menuAboutCallBack
 
 set(hMain, 'Visible', 'on');
 
-
 %%
- 
-
 function sliderCallBackFcn(hObject, eventdata, handles, sliderNum)
     figInfo =  getappdata(hObject.Parent, 'figInfo');
     winInfo = getappdata(hObject.Parent, 'winInfo');
@@ -45,16 +43,8 @@ function sliderCallBackFcn(hObject, eventdata, handles, sliderNum)
     dim = length(currentFrm);
     fileFolder = winInfo.fileFolder;
     fileNames = winInfo.fileNames;
-    imageType = winInfo.imageType;
-%     width = figInfo.width;
-%     height = figInfo.height;
-    
+    imageType = winInfo.imageType;    
     currentFrm(sliderNum) = int16(get(hObject, 'value'));
-%     if imageType == "RGB"
-%         currentFrm(sliderNum) = int16(get(hObject, 'value'));
-%     else
-%         currentFrm(sliderNum) = int16(get(hObject, 'value'));
-%     end
     
     winInfo.currentFrm = currentFrm;
     setappdata(hObject.Parent, 'winInfo',winInfo);
@@ -92,7 +82,7 @@ function sliderCallBackFcn(hObject, eventdata, handles, sliderNum)
                     end
                 end
                 if contains(figInfo.filename, "nd2")
-                    imDisp = figInfo.getXYplane(planeNum(1), planeNum(4), planeNum(3));
+                    imDisp = figInfo.getXYplane(planeNum(1), planeNum(4), planeNum(3)); %need to be the squence of "CLT"
                 else
                     imDisp = figInfo.getPlane([planeNum(2), planeNum(1), planeNum(3), planeNum(4)]);  %need to be the squence of "ZCTL"
                 end
@@ -392,7 +382,7 @@ end
 
 
 function buttonCallbackFcn(hObject,eventdata, handles)
-    winInfo.isVirtualStack = 1;
+    winInfo.isVirtualStack = 0;
     winInfo.fileNames = [];
     winInfo.fileFolder = [];
     winInfo.windowName = [];
@@ -410,11 +400,18 @@ function buttonCallbackFcn(hObject,eventdata, handles)
     winInfo.windowName = valName;
     figInfo.width = size(imData,1);
     figInfo.height = size(imData,2);
-    %need mark the order
+    figInfo.series =1;
     figInfo.sizeT = 1;
-    if length(size(imData))>2
+    figInfo.sizeZ = 1;
+    figInfo.sizeC = 1;
+    figInfo.seriesCount =1;
+    
+    %need mark the order
+    winInfo.currentFrm = 1;
+    if length(size(imData))==3
         figInfo.sizeT = size(imData,3);
         winInfo.dimensionOrder = 'XYT';
+        figInfo.sizeT = size(imData,3);
     end
     %need mark the order
     winInfo.imageType=class(imData);
@@ -448,9 +445,9 @@ function [out1, out2, out3] = getVaribleGUI()
         end
 end
 
-function openFiugreFcn(hObject,eventdata, handles, type)
+function openFiugreFcn(hObject,eventdata, handles, type, isVirtualStack)
 
-    winInfo.isVirtualStack = 1;
+    winInfo.isVirtualStack = isVirtualStack;
     winInfo.fileNames = [];
     winInfo.fileFolder = [];
     winInfo.windowName = [];
@@ -459,15 +456,35 @@ function openFiugreFcn(hObject,eventdata, handles, type)
     figInfo = [];
     switch type
         case 'file'
-             [fileName, fileFolder, index] = uigetfile({"*.tif; *.tiff; *.bmp; *.jpg";"*.czi; *nd2"; "*.*"}, "File Selector");
+             [fileName, fileFolder, index] = uigetfile({"*.tif; *.tiff; *.bmp; *.jpg; *.png; *.czi; *nd2"; "*.*"}, "File Selector");
 
              if index
                 winInfo.fileFolder = fileFolder;
                 winInfo.windowName = fileName;
                 winInfo.fileNames = cellstr(fileName);
                 %imData = imread(fullfile(fileFolder, fileName));
-                [figInfo, imData, dimensionOrder] = bioFormatsParser(fullfile(fileFolder, fileName), winInfo.isVirtualStack);
                 
+                
+                fid = fopen(fullfile(fileFolder, fileName));
+                fseek(fid,0,'eof');
+                fSize = ftell(fid);
+                if fSize>1e10 && (~isVirtualStack) %if the file is too big and not open as virtual stack
+                    hTemp = figure('menubar', 'none', 'Position', [500 600 300 100],'NumberTitle','off','name', 'Warning', 'Dockcontrols', 'off','Resize','off');
+                    set(hTemp, 'windowStyle','modal');
+                    uicontrol(hTemp, 'Style', 'text','String', 'The file is too big, do you want to load it as virtual stack?', 'Position', [50 50 200 40]);
+                    button1 = uicontrol(hTemp, 'Style', 'pushButton','String', 'Yes', 'Position', [50 20 60 20]);
+                    set(button1, 'Callback', 'hTemp = get(gcbo, "Parent"); setappdata(hTemp, "isVirtualStack", 1); uiresume(hTemp);'); %return the figInfo and imData to window hTemp
+                    button2 = uicontrol(hTemp, 'Style', 'pushButton','String', 'No', 'Position', [190 20 60 20]);
+                    set(button2, 'Callback', 'hTemp = get(gcbo, "Parent"); setappdata(hTemp, "isVirtualStack", 0); uiresume(hTemp);'); %return the figInfo and imData to window hTemp
+                    uiwait(hTemp);
+                    if ishandle(hTemp)
+                        winInfo.isVirtualStack=getappdata(hTemp, 'isVirtualStack');
+                        delete(hTemp);
+                    end
+                end
+                
+                
+                [figInfo, imData, dimensionOrder] = bioFormatsParser(fullfile(fileFolder, fileName), winInfo.isVirtualStack);                
                 winInfo.dimensionOrder = dimensionOrder;
                 winInfo.imageType = class(imData);
                 freedom = length(dimensionOrder)-2;
@@ -504,7 +521,7 @@ function openFiugreFcn(hObject,eventdata, handles, type)
                 winInfo.windowName = fileFolderNameSplit{end};
               end
         case  'varible'
-              [figInfo, imData] = getVaribleGUI;                   
+              [figInfo, winInfo, imData] = getVaribleGUI;                   
         otherwise
             warning('unproper parameter for opening figures!');
     end
