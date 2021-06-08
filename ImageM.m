@@ -18,7 +18,7 @@ uimenu(hMenuFile, 'label', 'ImportFromVarible', 'Accelerator', 'V','Callback',{@
 uimenu(hMenuFile, 'label', 'Save', 'Accelerator', 'S','Callback',@menuSaveCallBackFcn);
 
 hMenuImage = uimenu(hMain, 'label', '&Image');
-uimenu(hMenuImage, 'label', 'Contrast', 'Callback',@menuContrastCallBackFcn);
+uimenu(hMenuImage, 'label', 'Contrast Shift+C', 'Callback',@menuContrastCallBackFcn);
 uimenu(hMenuImage, 'label', 'Duplicate Shift+D', 'Callback', @menuDuplicateCallBackFcn);
 
 hMenuProcess = uimenu(hMain, 'label', '&Process');
@@ -379,9 +379,9 @@ end
 
 function figurePresskeyFcn(hObject,eventdata, handles)
 
-     if strcmp(eventdata.Key, 'return')
-            figure(hMain);
-     end
+    if strcmp(eventdata.Key, 'return')
+        figure(hMain);
+    end
     switch eventdata.Character
         case 'D'
             menuDuplicateCallBackFcn();
@@ -748,7 +748,6 @@ function contrastPanelUpdate(hObject, eventdata, handles)
         set(hAxes, 'xTick', []);
         delete(hAxes.Children);
     end
-
 end
 
 function nonWindowPanelCloseFcn(hObject,eventdata, handles, panelType)
