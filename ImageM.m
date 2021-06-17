@@ -56,7 +56,7 @@ function sliderCallBackFcn(hObject, eventdata, handles, sliderNum)
         else
             if imageType == "RGB"
                 planeNum = nan(1,3);
-                fullOrder = 'ZTL';
+                fullOrder = 'ZTS';
                 counter = 1;
                 for i = 1:length(planeNum)
                     if contains(winInfo.dimensionOrder, fullOrder(i))
@@ -71,7 +71,7 @@ function sliderCallBackFcn(hObject, eventdata, handles, sliderNum)
                 imDisp(:,:,3) = figInfo.getPlane([planeNum(1), 3, planeNum(2:end)]);
             else
                 planeNum = nan(1,4);
-                fullOrder = 'CZTL';
+                fullOrder = 'CZTS';
                 counter = 1;
                 for i = 1:length(planeNum)
                     if contains(winInfo.dimensionOrder, fullOrder(i))
@@ -82,9 +82,9 @@ function sliderCallBackFcn(hObject, eventdata, handles, sliderNum)
                     end
                 end
                 if contains(figInfo.filename, "nd2")
-                    imDisp = figInfo.getXYplane(planeNum(1), planeNum(4), planeNum(3)); %need to be the squence of "CLT"
+                    imDisp = figInfo.getXYplane(planeNum(1), planeNum(4), planeNum(3)); %need to be the squence of "CST"
                 else
-                    imDisp = figInfo.getPlane([planeNum(2), planeNum(1), planeNum(3), planeNum(4)]);  %need to be the squence of "ZCTL"
+                    imDisp = figInfo.getPlane([planeNum(2), planeNum(1), planeNum(3), planeNum(4)]);  %need to be the squence of "ZCTS"
                 end
                 
             end
@@ -405,7 +405,7 @@ function buttonCallbackFcn(hObject,eventdata, handles)
     figInfo.sizeZ = 1;
     figInfo.sizeC = 1;
     figInfo.seriesCount =1;
-    
+    winInfo.dimensionOrder = 'XY';
     %need mark the order
     winInfo.currentFrm = 1;
     if length(size(imData))==3
@@ -463,8 +463,7 @@ function openFiugreFcn(hObject,eventdata, handles, type, isVirtualStack)
                 winInfo.windowName = fileName;
                 winInfo.fileNames = cellstr(fileName);
                 %imData = imread(fullfile(fileFolder, fileName));
-                
-                
+                                
                 fid = fopen(fullfile(fileFolder, fileName));
                 fseek(fid,0,'eof');
                 fSize = ftell(fid);
@@ -492,17 +491,35 @@ function openFiugreFcn(hObject,eventdata, handles, type, isVirtualStack)
                 if ~(contains(fileName, 'nd2')||contains(fileName, 'czi'))
                     temp = imfinfo(fullfile(fileFolder, fileName));
                     if temp(1).ColorType == "truecolor"
-                        winInfo.imageType = 'RGB';
+                        winInfo.imageType = "RGB";
                         imData = uint8(imData);
                         freedom = length(dimensionOrder)-3;
                     end                    
                 end
                 
                 if freedom == 0
-                    freedom = 1;
+                    winInfo.currentFrm = 1;
+                    maxFrm = 1;
+                else
+                    winInfo.currentFrm = ones(1, freedom);
+                    maxFrm = ones(1, freedom);
                 end
-                winInfo.currentFrm = ones(1, freedom);
+                fullOrder = 'CZTS';
+                fullFrm = nan(1,4);
+                fullFrm(1) = figInfo.sizeC;
+                fullFrm(2) = figInfo.sizeZ;
+                fullFrm(3) = figInfo.sizeT;
+                fullFrm(4) = figInfo.seriesCount;
+                counter = freedom;
+                for i = 4:-1:1  %reverse order to exclue the possible RGB pictures
+                    if contains(winInfo.dimensionOrder, fullOrder(i))&&(counter>0)
+                        maxFrm(counter)=fullFrm(i);
+                        counter = counter-1;
+                    end
+                end
+                winInfo.maxFrm = maxFrm;
              end
+             
         case  'folder'
               fileFolder = uigetdir();
               if fileFolder ~= 0
@@ -556,25 +573,235 @@ end
 
 function menuDuplicateCallBackFcn(hObject,eventdata, handles)
     activeWin = getActiveFigure();
-    hNew = copyobj(activeWin,0,'legacy');
-    
-%     figData = getappdata(activeWin, 'figData');
-%     currentFrm = getappdata(activeWin, 'currentFrm');
-    winInfo = getappdata(hNew, 'winInfo');
-    oldName = split(winInfo.windowName, ".");
-    if length(oldName) == 1
-        winInfo.windowName = strcat(oldName{1},'-copy');
-    else
-        winInfo.windowName = strcat(oldName{1:end-1},'-copy.',oldName{end});
-    end
-    
-    setappdata(hNew,'winInfo',winInfo);
+    if ishandle(activeWin)
+        
+        figInfo = getappdata(activeWin, 'figInfo');
+        winInfo = getappdata(activeWin, 'winInfo');
+        dimensionOrder = winInfo.dimensionOrder;
+        maxFrm = winInfo.maxFrm;
+        freedom = length(dimensionOrder)-2;
+        if winInfo.imageType == "RGB"
+            freedom = length(dimensionOrder)-3;
+        end
+        
+        oldName = split(winInfo.windowName, ".");
+        if length(oldName) == 1
+            winInfo.windowName = strcat(oldName{1},'-copy');
+        else
+            winInfo.windowName = strcat(oldName{1:end-1},'-copy.',oldName{end});
+        end
 
-%     setappdata(hNew,'figData',figData);
-%     setappdata(hNew,'currentFrm', currentFrm);
-    set(hNew, "name", winInfo.windowName);
-    windows = [windows, hNew];
-    activeWin = hNew;
+        if freedom > 0
+            % create a GUI to specify the range of frames to duplicate
+            textBoxHeight = 15;
+            buttonHeight = 20;
+            gap = 5;
+            hTemp = figure('menubar', 'none','NumberTitle','off','name', 'Duplication', 'Dockcontrols', 'off','Resize','off');
+            set(hTemp, 'windowStyle','modal');
+            set(hTemp, 'Position', [400, 400, 260, buttonHeight+textBoxHeight*2+gap*4+gap*freedom+textBoxHeight*freedom]);
+            hBtnOk = uicontrol(hTemp, 'Style', 'pushButton','String', 'Ok', 'Position', [100 gap 60 buttonHeight]);
+            set(hBtnOk, "Callback",{@menuDupBtnOKCallback,blanks(0),figInfo.filename,winInfo});
+            hBtnCancel = uicontrol(hTemp, 'Style', 'pushButton','String', 'Cancel', 'Position', [100+60+30 gap 60 buttonHeight]);
+            set(hBtnCancel, "Callback", 'delete(get(gcbo, "Parent"))');
+            for i = freedom:-1:1
+                hText = uicontrol(hTemp,"Style", "text", "HorizontalAlignment", "left", "Position", [20, gap+buttonHeight+gap*(freedom-i+1)+textBoxHeight*(freedom-i), 60, textBoxHeight]);
+                hEdit = uicontrol(hTemp,"Style", "edit", "HorizontalAlignment", "left", "Position", [20+20+30, gap+buttonHeight+gap*(freedom-i+1)+textBoxHeight*(freedom-i), 60, textBoxHeight]);
+                set(hText, "String", [dimensionOrder(end-(freedom-i)), ' Range'])
+                set(hEdit, "Tag", ['Edit', num2str(i)], "String", ['1:',num2str(maxFrm(end-(freedom-i)))]);
+                set(hEdit, "Enable", "off");
+            end
+            hRadioButton = uicontrol(hTemp, "Style", "radiobutton","String","Duplicate only the current frame", "Position", [20, gap*2+buttonHeight+gap*freedom+textBoxHeight*freedom, 200, textBoxHeight]);
+            set(hRadioButton, "value", 1);
+            set(hRadioButton, "Callback", {@menuDupRadioBtnCallback, blanks(0), freedom});
+            hText = uicontrol(hTemp,"Style", "text", "HorizontalAlignment", "left", "Position", [20, gap*3+buttonHeight+gap*freedom+textBoxHeight*freedom+textBoxHeight, 60, textBoxHeight]);
+            hEdit = uicontrol(hTemp,"Style", "edit", "HorizontalAlignment", "left", "Position", [20+20+30, gap*3+buttonHeight+gap*freedom+textBoxHeight*freedom+textBoxHeight, 120, textBoxHeight]);
+            set(hText, "String", "Title");
+            set(hEdit, "String", winInfo.windowName);  
+            uiwait(hTemp);    
+            if ishandle(hTemp)
+                imData = getappdata(hTemp, 'imData');
+                winInfo = getappdata(hTemp, 'winInfo');
+                figInfo = getappdata(hTemp, 'figInfo');
+                delete(hTemp);
+            end        
+            if ~isempty(imData)
+                hNew = figure("menubar", "none","NumberTitle","off",'CreateFcn',{@figureCreateFcn, blanks(0), figInfo, winInfo, imData},'DeleteFcn', @figureCloseFcn);
+                set(hNew, 'WindowKeyPressFcn',@figurePresskeyFcn);
+                set(hNew, "name", winInfo.windowName);
+                set(hNew, "Position", get(hNew, "Position")+[200, 200, 0, 0]);
+                windows = [windows, hNew];
+                activeWin = hNew;
+            end        
+        else
+            hNew = copyobj(activeWin,0,'legacy');
+            setappdata(hNew, "winInfo", winInfo);
+            set(hNew, "name", winInfo.windowName);
+            set(hNew, "Position", get(hNew, "Position")+[200, 200, 0, 0]);
+            windows = [windows, hNew];
+            activeWin = hNew;
+        end
+    else
+        warndlg('There is no open figure!','No Figure');
+    end
+end
+
+function menuDupRadioBtnCallback(hObject,eventdata, handles, freedom)
+    hTemp = get(hObject, "Parent");
+    hRadioButton = findobj(hTemp, "Style", "radiobutton");
+    isOnlyOneFrame = hRadioButton.Value;
+    if isOnlyOneFrame
+        for i = 1:freedom
+            tag = ['Edit', num2str(i)];
+            hEdit = findobj(hTemp, "Tag", tag);
+            set(hEdit, "Enable", "off");
+        end
+    else
+        for i = 1:freedom
+            tag = ['Edit', num2str(i)];
+            hEdit = findobj(hTemp, "Tag", tag);
+            set(hEdit, "Enable", "on");
+        end
+    end
+end
+
+function menuDupBtnOKCallback(hObject,eventdata, handles, filePath, winInfo)
+    activeWin = getActiveFigure(); %seems there is no need to re-get activeFigure again
+    hTemp = get(hObject, "Parent");
+    set(hTemp, "Visible", "off");
+    hRadioButton = findobj(hTemp, "Style", "radiobutton");
+    isOnlyOneFrame = hRadioButton.Value;
+    dimensionOrder = winInfo.dimensionOrder;
+    if isOnlyOneFrame % choosing the current frame radio button
+        hImg = findobj(activeWin, "type", "Image");
+        imData = get(hImg, "CData");  %there might be a bug here for multiple C-channel images 
+        figInfo.width = size(imData, 2);
+        figInfo.height = size(imData, 1);
+        if size(imData)==3
+            winInfo.imageType = "RGB";
+            winInfo.dimensionOrder = 'XYC';
+            figInfo.sizeC = 3;
+        else
+            winInfo.imageType = class(imData);
+            winInfo.dimensionOrder = 'XY';
+            figInfo.sizeC = 1;
+        end
+        winInfo.currentFrm = 1;
+        winInfo.maxFrm = 1;
+        figInfo.sizeZ = 1;
+        figInfo.sizeT = 1;
+        figInfo.seriesCount = 1;
+        figInfo.series = 1;
+    else % specify the duplicaiton range
+        if winInfo.isVirtualStack
+            frameRange = cell(1,4);
+            if winInfo.imageType == "RGB"
+                fullOrder = 'ZTS';
+                frameRange{1}=1:3; %RGB channel
+                counter = 1;
+                for i = 1:3
+                    if contains(dimensionOrder, fullOrder(i))
+                        tag = ['Edit', num2str(counter)];
+                        hEdit = findobj(hTemp, "Tag", tag);
+                        text = get(hEdit, "String");
+                        frameRange{i+1} = eval(['[', text, ']']);
+                        counter = counter+1;
+                    else
+                        frameRange{i+1} = 1;
+                    end
+                end
+            else % if is a grayscale image stack
+                fullOrder = 'CZTS';
+                counter = 1;
+                for i = 1:4
+                    if contains(dimensionOrder, fullOrder(i))
+                        tag = ['Edit', num2str(counter)];
+                        hEdit = findobj(hTemp, "Tag", tag);
+                        text = get(hEdit, "String");
+                        frameRange{i} = eval(['[', text, ']']);
+                        counter = counter+1;
+                    else
+                        frameRange{i} = 1;
+                    end
+                end
+            end
+            isVirtualStack = 0;
+            %[figInfo, imData, dimensionOrder] = bioFormatsParser(figInfo.filename, isVirtualStack, frameRange);
+            [figInfo, imData, dimensionOrder] = bioFormatsParser(filePath, isVirtualStack, frameRange);
+            winInfo.dimensionOrder = dimensionOrder;
+            freedom = length(dimensionOrder)-2;
+            if winInfo.imageType == "RGB"
+                freedom = length(dimensionOrder)-3;
+            end
+
+            sizeInfo = size(imData);
+            winInfo.maxFrm = sizeInfo(end-freedom+1:end);
+            winInfo.currentFrm = ones(size(winInfo.maxFrm));
+
+        else %  is not a virtual stack
+            freedom = length(dimensionOrder)-2;
+            imDataOld = getappdata(activeWin, 'imData');
+            if winInfo.imageType == "RGB"
+                freedom = length(dimensionOrder)-3;
+            end
+            frameRange = cell(1, freedom);
+            for i = 1:freedom
+                tag = ['Edit', num2str(i)];
+                hEdit = findobj(hTemp, "Tag", tag);
+                text = get(hEdit, "String");
+                frameRange{i} = eval(['[', text, ']']);
+                if length(frameRange{i})<2
+                    dimensionOrder(end-freedom+i)=[];
+                end
+            end
+            if winInfo.imageType == "RGB"
+                switch freedom
+                    case 1
+                        imData = imDataOld(:,:,:,frameRange{1});
+                    case 2
+                        imData = imDataOld(:,:,:,frameRange{1},frameRange{2});
+                    case 3
+                        imData = imDataOld(:,:,:,frameRange{1},frameRange{2},frameRange{3});
+                end
+            else
+                switch freedom
+                    case 1
+                        imData = imDataOld(:,:,frameRange{1});
+                    case 2
+                        imData = imDataOld(:,:,frameRange{1},frameRange{2});
+                    case 3
+                        imData = imDataOld(:,:,frameRange{1},frameRange{2},frameRange{3});
+                    case 4
+                        imData = imDataOld(:,:,frameRange{1},frameRange{2},frameRange{3},frameRange{4});
+                end
+            end
+            imData = squeeze(imData);
+            figInfo.width = size(imData, 2);
+            figInfo.height = size(imData, 1);
+            sizeInfo = size(imData);
+            winInfo.dimensionOrder = dimensionOrder;
+            freedom = length(dimensionOrder)-2;  %re-calculate degree of freedom
+            if winInfo.imageType == "RGB"
+                freedom = length(dimensionOrder)-3;
+            end
+            if freedom>0
+                winInfo.maxFrm = sizeInfo(end-freedom+1:end);
+                winInfo.currentFrm = ones(size(winInfo.maxFrm));
+            else
+                winInfo.maxFrm = 1;
+                winInfo.currentFrm = 1;
+            end
+                
+            
+
+        end % end of if isvirtual stack
+      
+    end % end of the if radio button choosed
+    figInfo.filename = filePath;
+    winInfo.isVirtualStack = 0;
+    setappdata(hTemp, "imData", imData);
+    setappdata(hTemp, "winInfo", winInfo);
+    setappdata(hTemp, "figInfo", figInfo);
+    uiresume(hTemp);
 end
 
 function sliderMinCallBackFcn(hObject, eventdata, handles)
