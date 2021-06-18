@@ -246,7 +246,16 @@ function figureCreateFcn(hObject,eventdata, handles, figInfo, winInfo, imData)
         end
                 
     else  % for grayscale images
-                
+        
+        if winInfo.isVirtualStack
+            maxFrm = nan(1,4);
+            maxFrm(1)=figInfo.sizeC;
+            maxFrm(2)=figInfo.sizeZ;
+            maxFrm(3)=figInfo.sizeT;
+            maxFrm(4)=figInfo.seriesCount;
+            maxFrm(maxFrm==1)=[];
+        end
+        
         switch dim
             case 2
                 set(hObject,"position",[100, 100, width*ratio+2*gap, height*ratio+4*gap+2*textBoxHeight], "name", windowName);
@@ -257,7 +266,10 @@ function figureCreateFcn(hObject,eventdata, handles, figInfo, winInfo, imData)
                 set(hText, "position", [gap, figInfo.height*ratio+4*gap+textBoxHeight+sliderHeight, figInfo.width*ratio, textBoxHeight]);
                 set(hAxes, "Position", [gap, 3*gap+textBoxHeight+sliderHeight, figInfo.width*ratio, figInfo.height*ratio]);
                 
-                maxFrm = size(imData, 3);
+                if ~winInfo.isVirtualStack
+                    maxFrm = size(imData, 3);
+                end
+                
                 textInit = strcat(num2str(currentFrm), "/",num2str(maxFrm),", ",num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
                 hSlider = uicontrol("style", "slider", "value", currentFrm,"Min",1, "Max",maxFrm, "SliderStep",[1/(maxFrm-1), 1/(maxFrm-1)]);
                 set(hSlider, "position", [gap, 2*gap+textBoxHeight, figInfo.width*ratio, sliderHeight]);
@@ -268,8 +280,14 @@ function figureCreateFcn(hObject,eventdata, handles, figInfo, winInfo, imData)
                 set(hText, "position", [gap, figInfo.height*ratio+5*gap+textBoxHeight+2*sliderHeight, figInfo.width*ratio, textBoxHeight]);
                 set(hAxes, "Position", [gap, 4*gap+textBoxHeight+2*sliderHeight, figInfo.width*ratio, figInfo.height*ratio]);
                 
-                maxFrm1 = size(imData, 3);
-                maxFrm2 = size(imData, 4);
+                if ~winInfo.isVirtualStack
+                    maxFrm1 = size(imData, 3);
+                    maxFrm2 = size(imData, 4);
+                else
+                    maxFrm1 = maxFrm(1);
+                    maxFrm2 = maxFrm(2);
+                end
+                
                 textInit = strcat(dimensionOrder(3), num2str(currentFrm(1)), "/",num2str(maxFrm1),", ",dimensionOrder(4), num2str(currentFrm(2)), "/",num2str(maxFrm2),...
                     ", ",num2str(figInfo.width),"*",num2str(figInfo.height), ", ", winInfo.imageType);
                 hSlider = uicontrol("style", "slider", "value", currentFrm(1),"Min",1, "Max",maxFrm1, "SliderStep",[1/(maxFrm1-1), 1/(maxFrm1-1)]);
@@ -285,17 +303,11 @@ function figureCreateFcn(hObject,eventdata, handles, figInfo, winInfo, imData)
                 set(hText, "position", [gap, figInfo.height*ratio+6*gap+textBoxHeight+3*sliderHeight, figInfo.width*ratio, textBoxHeight]);
                 set(hAxes, "Position", [gap, 5*gap+textBoxHeight+3*sliderHeight, figInfo.width*ratio, figInfo.height*ratio]);
                 
-                maxFrm1 = size(imData, 3);
-                maxFrm2 = size(imData, 4);
-                maxFrm3 = size(imData, 5);
-                
-                maxFrm = nan(1,4);
-                if winInfo.isVirtualStack
-                    maxFrm(1)=figInfo.sizeC;
-                    maxFrm(2)=figInfo.sizeZ;
-                    maxFrm(3)=figInfo.sizeT;
-                    maxFrm(4)=figInfo.seriesCount;
-                    maxFrm(maxFrm==1)=[];
+                if ~winInfo.isVirtualStack
+                    maxFrm1 = size(imData, 3);
+                    maxFrm2 = size(imData, 4);
+                    maxFrm3 = size(imData, 5);
+                else
                     maxFrm1 = maxFrm(1);
                     maxFrm2 = maxFrm(2);
                     maxFrm3 = maxFrm(3);
@@ -321,10 +333,17 @@ function figureCreateFcn(hObject,eventdata, handles, figInfo, winInfo, imData)
                 set(hText, "position", [gap, figInfo.height*ratio+7*gap+textBoxHeight+4*sliderHeight, figInfo.width*ratio, textBoxHeight]);
                 set(hAxes, "Position", [gap, 6*gap+textBoxHeight+4*sliderHeight, figInfo.width*ratio, figInfo.height*ratio]);
                 
-                maxFrm1 = size(imData, 3);
-                maxFrm2 = size(imData, 4);
-                maxFrm3 = size(imData, 5);
-                maxFrm4 = size(imData, 6);
+                if ~winInfo.isVirtualStack
+                    maxFrm1 = size(imData, 3);
+                    maxFrm2 = size(imData, 4);
+                    maxFrm3 = size(imData, 5);
+                    maxFrm4 = size(imData, 6);
+                else
+                    maxFrm1 = maxFrm(1);
+                    maxFrm2 = maxFrm(2);
+                    maxFrm3 = maxFrm(3);
+                    maxFrm4 = maxFrm(4);
+                end                    
                 
                 textInit = strcat(dimensionOrder(3), num2str(currentFrm(1)), "/",num2str(maxFrm1),...
                     ", ",dimensionOrder(4), num2str(currentFrm(2)), "/",num2str(maxFrm2),...
