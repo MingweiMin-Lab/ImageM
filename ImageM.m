@@ -14,7 +14,7 @@ hMain = figure('menubar', 'none', 'Visible', 'off', 'Position', [600 800 350 20]
 hMenuFile = uimenu(hMain, 'label', '&File');
 uimenu(hMenuFile, 'label', 'Open', 'Accelerator', 'O','Callback',{@openFiugreFcn, blanks(0),'file',0});
 uimenu(hMenuFile, 'label', 'OpenAsVirtualStack', 'Callback',{@openFiugreFcn, blanks(0),'file',1});
-uimenu(hMenuFile, 'label', 'ImportAsStack', 'Accelerator', 'I','Callback',{@openFiugreFcn, blanks(0), 'folder',0});
+%uimenu(hMenuFile, 'label', 'ImportAsStack', 'Accelerator', 'I','Callback',{@openFiugreFcn, blanks(0), 'folder',0});
 uimenu(hMenuFile, 'label', 'ImportFromVarible', 'Accelerator', 'V','Callback',{@openFiugreFcn, blanks(0), 'varible',0});
 uimenu(hMenuFile, 'label', 'Save', 'Accelerator', 'S','Callback',@menuSaveCallBackFcn);
 
@@ -399,8 +399,41 @@ function figurePresskeyFcn(hObject,eventdata, handles)
      end
 end
 
+function varibleGUIRadioBtnCallback(hObject,eventdata, handles)
+    hTemp = hObject.Parent;
+    pop = findobj(hTemp, "Tag","pop1");
+    isDebugMode = hObject.Value;
+    if isDebugMode
+        vals = whos; % get varible information in debug workspace
+    else
+        vals = evalin('base', 'whos'); % get varible information in base workspace
+    end
+    [valNames]={vals.name};
+    [valSizes]={vals.size};
+    [valClass]={vals.class};
+    valNameToShow = [];
+    for i = 1:length(vals)
+        if valClass{i}~="char" && valClass{i}~="string"
+            sizeInfo = valSizes{i};
+            sizeInfo(sizeInfo<=1)=[];
+            if length(sizeInfo)>1
+                valNameToShow = [valNameToShow, string(valNames{i})];
+            end
+        end
+    end
+    hBtnOk = findobj(hTemp, "Tag", "btnOk");
+    if ~isempty(valNameToShow)
+        pop.String = valNameToShow;
+        set(pop, "Enable", "on");       
+        set(hBtnOk, "Enable", "on");
+    else
+        pop.String = "None";
+        set(pop, "Enable", "off");
+        set(hBtnOk, "Enable", "off");
+    end           
+end
 
-function buttonCallbackFcn(hObject,eventdata, handles)
+function varibleGUIBtnOKCallback(hObject,eventdata, handles)
     winInfo.isVirtualStack = 0;
     winInfo.fileNames = [];
     winInfo.fileFolder = [];
@@ -409,13 +442,19 @@ function buttonCallbackFcn(hObject,eventdata, handles)
     imData = [];
     
     hTemp = hObject.Parent;
-    pop = findobj(hTemp, "Style","popupmenu");
+    pop = findobj(hTemp, "Tag","pop1");
     if length(string(pop.String))>1  %detect the situation of only one varible, need covert the name into a string first
         valName = pop.String{pop.Value};
     else
         valName = pop.String;
     end
-    imData = evalin('base',valName);
+    hRadioBtn = findobj(hTemp, "Style", "radiobotton");
+    isDebugMode = hRadioBtn.value;
+    if ~isDebugMode
+        imData = evalin('base',valName);
+    else
+        imData = valName;
+    end
     winInfo.windowName = valName;
     figInfo.width = size(imData,1);
     figInfo.height = size(imData,2);
@@ -425,12 +464,19 @@ function buttonCallbackFcn(hObject,eventdata, handles)
     figInfo.sizeC = 1;
     figInfo.seriesCount =1;
     winInfo.dimensionOrder = 'XY';
+    winInfo.currentFrm = 1;
+    winInfo.maxFrm = 1;
+    
     %need mark the order
     winInfo.currentFrm = 1;
     if length(size(imData))==3
         figInfo.sizeT = size(imData,3);
         winInfo.dimensionOrder = 'XYT';
         figInfo.sizeT = size(imData,3);
+        winInfo.currentFrm = 1;
+        winInfo.maxFrm = size(imData,3);
+        pop2 = findobj(hTemp, "Tag","pop2");
+        set(pop2, "String", "XYT");
     end
     %need mark the order
     winInfo.imageType=class(imData);
@@ -447,14 +493,43 @@ function [out1, out2, out3] = getVaribleGUI()
         out3 = [];
         hTemp = figure('menubar', 'none', 'Position', [500 600 300 100],'NumberTitle','off','name', 'Choose a varible', 'Dockcontrols', 'off','Resize','off');
         set(hTemp, 'windowStyle','modal');
-        pop = uicontrol(hTemp,'Style','popupmenu','Position', [70 50 60 20]);
-        txt = uicontrol(hTemp, 'Style', 'text','String', 'Varibles', 'Position', [20 50 40 20] );
-        button = uicontrol(hTemp, 'Style', 'pushButton','String', 'Ok', 'Position', [170 50 60 20]);
-        set(button, 'Callback', @buttonCallbackFcn); %return the figInfo and imData to window hTemp
+        radioBtn = uicontrol(hTemp,'Style','radiobutton',"String","debug mode",'Position', [30 80 100 20]);
+        set(radioBtn, "Callback", @varibleGUIRadioBtnCallback);
+        pop = uicontrol(hTemp,'Style','popupmenu','Position', [80 50 60 20], 'Tag', 'pop1');
+        uicontrol(hTemp, 'Style', 'text','String', 'Varibles', 'Position', [30 50 40 20] );
+        
+        pop2 = uicontrol(hTemp,'Style','popupmenu','Position', [210 50 60 20], 'Tag', 'pop2', "String", ["XY"]);
+        set(pop2, "Enable", "off");
+        uicontrol(hTemp, 'Style', 'text','String', 'Order()', 'Position', [160 50 40 20] );        
+        
+        hBtnOk = uicontrol(hTemp, 'Style', 'pushButton','String', 'Ok', 'Position', [130 20 60 20], "Tag", "btnOk");
+        set(hBtnOk, 'Callback', @varibleGUIBtnOKCallback); %return the figInfo and imData to window hTemp
+        hBtnCancel = uicontrol(hTemp, 'Style', 'pushButton','String', 'Cancel', 'Position', [220 20 60 20]);
+        set(hBtnCancel, "Callback", 'delete(get(gcbo, "Parent"))');
+
         vals = evalin('base', 'whos'); % get varible information in base workspace
         [valNames]={vals.name};
-        valNames=string(valNames);
-        pop.String = valNames;
+        [valSizes]={vals.size};
+        valNameToShow = [];
+        for i = 1:length(vals)
+            sizeInfo = valSizes{i};
+            sizeInfo(sizeInfo==1)=[];
+            if length(sizeInfo)>1
+                valNameToShow = [valNameToShow, string(valNames{i})];
+            end
+        end
+        
+        %valNames=string(valNames);
+        if ~isempty(valNameToShow)
+            set(hBtnOk, "Enable", "on");
+            set(pop, "Enable", "on");
+            pop.String = valNameToShow;
+        else
+            pop.String = "None";
+            set(pop, "Enable", "off");
+            set(hBtnOk, "Enable", "off");
+        end
+        
         uiwait(hTemp);
         if ishandle(hTemp)
             out1 = getappdata(hTemp,'figInfo');
@@ -555,6 +630,8 @@ function openFiugreFcn(hObject,eventdata, handles, type, isVirtualStack)
                 winInfo.dimensionOrder = 'XYT';
                 fileFolderNameSplit = split(fileFolder, "\");
                 winInfo.windowName = fileFolderNameSplit{end};
+                winInfo.currentFrm = 1;
+                winInfo.maxFrm = length(winInfo.fileNames);
               end
         case  'varible'
               [figInfo, winInfo, imData] = getVaribleGUI;                   
