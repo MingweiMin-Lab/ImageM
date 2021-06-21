@@ -13,9 +13,9 @@ nonFigureList.contrastPanel = [];
 hMain = figure('menubar', 'none', 'Visible', 'off', 'Position', [600 800 350 20],'NumberTitle','off','name', 'ImageM', 'Dockcontrols', 'off','Resize','off');
 hMenuFile = uimenu(hMain, 'label', '&File');
 uimenu(hMenuFile, 'label', 'Open', 'Accelerator', 'O','Callback',{@openFiugreFcn, blanks(0),'file',0});
-uimenu(hMenuFile, 'label', 'OpenAsVirtualStack', 'Callback',{@openFiugreFcn, blanks(0),'file',1});
-%uimenu(hMenuFile, 'label', 'ImportAsStack', 'Accelerator', 'I','Callback',{@openFiugreFcn, blanks(0), 'folder',0});
-uimenu(hMenuFile, 'label', 'ImportFromVarible', 'Accelerator', 'V','Callback',{@openFiugreFcn, blanks(0), 'varible',0});
+uimenu(hMenuFile, 'label', 'OpenAsVirtualStack', 'Callback','V','Callback',{@openFiugreFcn, blanks(0),'file',1});
+uimenu(hMenuFile, 'label', 'ImportFromFolder', 'Accelerator', 'I','Callback',{@openFiugreFcn, blanks(0), 'folder',0});
+uimenu(hMenuFile, 'label', 'ImportFromWorkSpace', 'Accelerator', 'W','Callback',{@openFiugreFcn, blanks(0), 'varible',0});
 uimenu(hMenuFile, 'label', 'Save', 'Accelerator', 'S','Callback',@menuSaveCallBackFcn);
 
 hMenuImage = uimenu(hMain, 'label', '&Image');
@@ -626,8 +626,15 @@ function openFiugreFcn(hObject,eventdata, handles, type, isVirtualStack)
                 height = size(imData,1); %get height
                 figInfo.width = width;
                 figInfo.height = height;
-                figInfo.sizeT = length(filesInfo);
+                sizeT = length(filesInfo);
+                figInfo.sizeT = sizeT;
+                imData = nan(height, width, length(filesInfo));
+                for i =1:sizeT
+                    imData(:,:,i) = imread(fullfile(fileFolder,winInfo.fileNames{i}));
+                end
+                
                 winInfo.dimensionOrder = 'XYT';
+                winInfo.isVirtualStack = 0;
                 fileFolderNameSplit = split(fileFolder, "\");
                 winInfo.windowName = fileFolderNameSplit{end};
                 winInfo.currentFrm = 1;

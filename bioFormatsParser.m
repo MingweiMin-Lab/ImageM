@@ -1,6 +1,7 @@
 function [bfReader, imData, dimentionOrder] = bioFormatsParser(filePath, isVirtualStack, varargin)
 %varargin is the input of selcted range of images to display:
 %{[CRange],[ZRange],[TRange],[SRange]}
+
     bfReader = BioformatsImage(filePath); 
     dimentionOrder = 'XY';
     W = bfReader.width;
