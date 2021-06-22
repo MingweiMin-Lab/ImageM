@@ -13,7 +13,7 @@ nonFigureList.contrastPanel = [];
 hMain = figure('menubar', 'none', 'Visible', 'off', 'Position', [600 800 350 20],'NumberTitle','off','name', 'ImageM', 'Dockcontrols', 'off','Resize','off');
 hMenuFile = uimenu(hMain, 'label', '&File');
 uimenu(hMenuFile, 'label', 'Open', 'Accelerator', 'O','Callback',{@openFiugreFcn, blanks(0),'file',0});
-uimenu(hMenuFile, 'label', 'OpenAsVirtualStack', 'Callback','V','Callback',{@openFiugreFcn, blanks(0),'file',1});
+uimenu(hMenuFile, 'label', 'OpenAsVirtualStack', 'Accelerator','V','Callback',{@openFiugreFcn, blanks(0),'file',1});
 uimenu(hMenuFile, 'label', 'ImportFromFolder', 'Accelerator', 'I','Callback',{@openFiugreFcn, blanks(0), 'folder',0});
 uimenu(hMenuFile, 'label', 'ImportFromWorkSpace', 'Accelerator', 'W','Callback',{@openFiugreFcn, blanks(0), 'varible',0});
 uimenu(hMenuFile, 'label', 'Save', 'Accelerator', 'S','Callback',@menuSaveCallBackFcn);
@@ -404,6 +404,8 @@ function varibleGUIRadioBtnCallback(hObject,eventdata, handles)
     pop = findobj(hTemp, "Tag","pop1");
     isDebugMode = hObject.Value;
     if isDebugMode
+        a = dbstack;
+        b = a(length(a)).name;
         vals = whos; % get varible information in debug workspace
     else
         vals = evalin('base', 'whos'); % get varible information in base workspace
@@ -448,8 +450,8 @@ function varibleGUIBtnOKCallback(hObject,eventdata, handles)
     else
         valName = pop.String;
     end
-    hRadioBtn = findobj(hTemp, "Style", "radiobotton");
-    isDebugMode = hRadioBtn.value;
+    hRadioBtn = findobj(hTemp, "Style", "radiobutton");
+    isDebugMode = get(hRadioBtn, "Value");
     if ~isDebugMode
         imData = evalin('base',valName);
     else
