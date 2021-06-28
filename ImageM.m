@@ -404,9 +404,10 @@ function varibleGUIRadioBtnCallback(hObject,eventdata, handles)
     pop = findobj(hTemp, "Tag","pop1");
     isDebugMode = hObject.Value;
     if isDebugMode
+        dbstop;
         a = dbstack;
         b = a(length(a)).name;
-        vals = whos; % get varible information in debug workspace
+        vals = whos % get varible information in debug workspace
     else
         vals = evalin('base', 'whos'); % get varible information in base workspace
     end
@@ -670,10 +671,19 @@ end
 function menuSaveCallBackFcn(hObject,eventdata, handles)
     
     activeWin = getActiveFigure();
-    hAxes = activeWin.CurrentAxes;
-    data = get(hAxes.Children, "CData");
-    winInfo = getappdata(activeWin, 'winInfo');
-    uisave(data, winInfo.windowName);
+    fileFolder = uigetdir();
+    if ~isempty(fileFolder)
+        winInfo = getappdata(activeWin, 'winInfo');
+        fileName = split(winInfo.windowName, '.');
+        fileName = fileName{1};
+        imData = getappdata(activeWin, 'imData');
+        maxFrm = winInfo.maxFrm;
+        for i = 1: maxFrm
+            data = imData(:,:,i);
+            imwrite(uint16(data),[fullfile(fileFolder, fileName), '.tif'],'WriteMode','append');
+        end
+    end  
+    %uisave(data, winInfo.windowName);
 end
 
 function menuDuplicateCallBackFcn(hObject,eventdata, handles)
@@ -721,7 +731,7 @@ function menuDuplicateCallBackFcn(hObject,eventdata, handles)
             hText = uicontrol(hTemp,"Style", "text", "HorizontalAlignment", "left", "Position", [20, gap*3+buttonHeight+gap*freedom+textBoxHeight*freedom+textBoxHeight, 60, textBoxHeight]);
             hEdit = uicontrol(hTemp,"Style", "edit", "HorizontalAlignment", "left", "Position", [20+20+30, gap*3+buttonHeight+gap*freedom+textBoxHeight*freedom+textBoxHeight, 120, textBoxHeight]);
             set(hText, "String", "Title");
-            set(hEdit, "String", winInfo.windowName);  
+            set(hEdit, "String", winInfo.windowName, "Tag", "Edit0");  
             uiwait(hTemp);    
             if ishandle(hTemp)
                 imData = getappdata(hTemp, 'imData');
@@ -894,13 +904,14 @@ function menuDupBtnOKCallback(hObject,eventdata, handles, filePath, winInfo)
             else
                 winInfo.maxFrm = 1;
                 winInfo.currentFrm = 1;
-            end
-                
-            
+            end    
 
         end % end of if isvirtual stack
       
     end % end of the if radio button choosed
+    hEdit = findobj(hTemp, "Tag", 'Edit0');
+    windowName = get(hEdit, "String");
+    winInfo.windowName = windowName;
     figInfo.filename = filePath;
     winInfo.isVirtualStack = 0;
     setappdata(hTemp, "imData", imData);
